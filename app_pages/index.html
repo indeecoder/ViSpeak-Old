@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <title x-text="APP_DATA.header.title">ViSpeak</title>
+    
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Poppins', 'sans-serif'] },
+                    colors: {
+                        brand: { black: '#111111', gray: '#f3f4f6', border: '#e5e7eb', success: '#10b981', surface: '#ffffff' }
+                    },
+                    boxShadow: { 'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)', 'focus': '0 0 0 3px rgba(16, 185, 129, 0.2)', }
+                }
+            }
+        }
+    </script>
+    
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.12.0/dist/cdn.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    
+    <style>
+        :root { --color-primary: #111111; --color-success: #10b981; --color-error: #ef4444; --color-info: #3b82f6; --color-bg: #fafafa; --color-text: #374151; }
+        body { background-color: var(--color-bg); color: var(--color-text); -webkit-font-smoothing: antialiased; }
+        #input_video { transform: scaleX(-1); object-fit: cover; }
+        .preview-mirror { transform: scaleX(-1); object-fit: cover; }
+        [x-cloak] { display: none !important; }
+        .animate-swipe-out { animation: swipeRightOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        .animate-swipe-in { animation: swipeLeftIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        @keyframes swipeRightOut { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(120%) scale(0.9); opacity: 0; } }
+        @keyframes swipeLeftIn { 0% { transform: translateX(-100%) scale(0.9); opacity: 0; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+        .selected-flash { animation: flash-green 0.5s ease-out forwards; }
+        @keyframes flash-green { 0% { background-color: var(--color-success); color: white; transform: scale(0.98); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4); } 40% { transform: scale(1.01); } 100% { background-color: white; color: var(--color-text); transform: scale(1); } }
+        .flash-border-success { animation: border-green-pulse 0.6s ease-out forwards; }
+        @keyframes border-green-pulse { 0% { border-color: var(--color-success); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3); } 100% { border-color: #e5e7eb; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); } }
+        .progress-fill { transition: width 0.1s linear; border-radius: 9999px; }
+        input[type="range"] { accent-color: var(--color-primary); }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    </style>
+</head>
+
+<body x-data="appData()" x-init="initApp()" x-cloak class="antialiased min-h-screen flex flex-col relative text-gray-800">
+    
+    <!-- Loading Screen -->
+    <div x-show="isLoading" x-transition:leave="transition ease-out duration-500" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white backdrop-blur-sm">
+        <div class="w-10 h-10 border-4 border-gray-200 border-t-brand-black rounded-full animate-spin mb-6"></div>
+        <h2 class="text-lg font-semibold text-brand-black animate-pulse" x-text="APP_DATA.texts.loading.title"></h2>
+        <p class="text-xs text-gray-400 mt-2 text-center max-w-[200px]" x-text="APP_DATA.texts.loading.subtitle"></p>
+    </div>
+
+    <!-- Dialog Box -->
+    <div x-show="showDialog" x-transition class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all scale-100">
+            <div class="flex items-start gap-4">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-1" :class="{ 'bg-emerald-100 text-emerald-600': dialogType === 'success', 'bg-red-100 text-red-600': dialogType === 'error', 'bg-blue-100 text-blue-600': dialogType === 'info' }">
+                    <i class="fa-solid text-lg" :class="{ 'fa-check': dialogType === 'success', 'fa-circle-exclamation': dialogType === 'error', 'fa-circle-info': dialogType === 'info' }"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-lg text-gray-900 mb-1" x-text="dialogTitle"></h3>
+                    <p class="text-sm text-gray-500 leading-relaxed" x-text="dialogMessage"></p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button @click="closeDialog()" class="px-5 py-2 bg-brand-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 active:scale-95 transition-all shadow-sm"> OK </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Video -->
+    <video id="input_video" class="absolute top-0 left-0 opacity-0 w-1 h-1 pointer-events-none" playsinline></video>
+
+    <!-- Header -->
+    <header class="w-full px-6 py-4 flex justify-between items-center border-b border-gray-200 bg-white/90 backdrop-blur-md z-40 relative sticky top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0 shadow-sm">
+                <i class="fa-solid" x-bind:class="APP_DATA.header.icon"></i>
+            </div>
+            <div class="flex flex-col">
+                <h1 class="font-bold text-base leading-none text-brand-black tracking-tight" x-text="APP_DATA.header.title"></h1>
+                <span class="text-[10px] font-semibold tracking-wide text-gray-400 uppercase mt-0.5" x-text="APP_DATA.header.subtitle"></span>
+            </div>
+        </div>
+        <div class="flex gap-1">
+            <button @click="currentView = currentView === 'settings' ? 'main' : 'settings'" class="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors" title="Settings">
+                <i class="fa-solid fa-sliders text-sm"></i>
+            </button>
+            <button @click="currentView = currentView === 'about' ? 'main' : 'about'" class="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors" title="Help">
+                <i class="fa-solid fa-circle-question text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative w-full overflow-y-auto bg-gray-50/50">
+        
+        <!-- View: Main Scanner -->
+        <div x-show="currentView === 'main'" class="w-full flex flex-col p-6 md:p-8 pb-24">
+            <div class="flex justify-between items-start mb-8 max-w-3xl mx-auto w-full">
+                <div class="flex flex-col gap-1 max-w-[180px]">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5" x-text="APP_DATA.texts.main.labelAction"></div>
+                    <div class="text-sm font-semibold text-brand-black leading-tight break-words" x-text="outputText"></div>
+                </div>
+                <div class="flex flex-col items-center gap-2.5">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full transition-colors duration-500" :class="cameraOn && isTracking ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-300'"></div>
+                        <span class="text-[9px] font-bold uppercase tracking-widest text-gray-400" x-text="getStatusText()"></span>
+                    </div>
+                    <div class="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-white shadow-lg bg-black shrink-0 group">
+                        <video id="preview_video" class="w-full h-full object-cover preview-mirror" playsinline muted></video>
+                        <div class="absolute bottom-0 left-0 w-full bg-black/50 backdrop-blur-sm text-[8px] font-bold text-white text-center py-1 opacity-0 group-hover:opacity-100 transition-opacity"> LIVE </div>
+                        <div class="absolute top-2 right-2 w-3 h-3 rounded-full border-2 border-white shadow-sm z-10" :class="cameraOn && isTracking ? 'bg-red-500 animate-pulse' : 'bg-gray-600'"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col items-center justify-center">
+                <div id="mainCard" class="w-full max-w-md bg-white rounded-3xl shadow-soft border border-gray-100 overflow-hidden transition-all duration-300 relative mb-8" :class="[ isInCooldown ? 'opacity-60 grayscale' : '', isHoldingBlink ? 'ring-4 ring-emerald-100 scale-[1.02]' : '' ]">
+                    <div class="absolute top-6 left-0 w-full flex justify-center z-10 pointer-events-none">
+                        <span class="inline-flex items-center px-3 py-1 bg-gray-900/5 rounded-full text-[10px] font-bold text-gray-500 uppercase tracking-widest backdrop-blur-sm border border-white/50">
+                            <span class="mr-1" x-text="APP_DATA.texts.main.labelSlot"></span>
+                            <span class="text-brand-black" x-text="currentIndex + 1"></span>
+                            <span class="text-gray-300 mx-1">/</span>
+                            <span class="text-gray-400" x-text="commands.length"></span>
+                        </span>
+                    </div>
+                    <div class="absolute top-0 left-0 h-1.5 w-full bg-gray-100 z-20">
+                        <div class="h-full bg-emerald-500 progress-fill shadow-sm" :style="`width: ${holdPercentage}%`"></div>
+                    </div>
+                    <div class="p-10 md:p-14 flex flex-col items-center justify-center text-center min-h-[300px] relative overflow-hidden">
+                        <div class="absolute inset-0 opacity-[0.02]" style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 24px 24px;"></div>
+                        <div :class="animationClass" class="w-full relative z-10">
+                            <h2 class="text-4xl md:text-5xl font-bold text-brand-black mb-4 leading-tight break-words w-full hyphens-auto">
+                                <span x-text="currentScanningCommand ? currentScanningCommand.message : '...'"></span>
+                            </h2>
+                            <div class="inline-flex items-center px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-100 text-xs font-bold text-emerald-700 uppercase tracking-widest shadow-sm">
+                                <span x-text="currentScanningCommand ? currentScanningCommand.label : ''"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 border-t border-gray-100 p-5 text-center relative overflow-hidden">
+                        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-gray-200 rounded-full"></div>
+                        <p class="text-xs font-medium text-gray-400 leading-relaxed px-2" x-text="cameraOn ? APP_DATA.texts.main.instruction : APP_DATA.texts.main.hintCameraOff"></p>
+                    </div>
+                </div>
+
+                <button @click="toggleCamera()" class="flex items-center gap-2 px-8 py-3.5 rounded-2xl text-sm font-bold transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-gray-200/50" :class="cameraOn ? 'bg-white text-gray-700 border border-gray-200 hover:bg-red-50 hover:text-red-600' : 'bg-brand-black text-white hover:bg-gray-800'">
+                    <i :class="cameraOn ? 'fa-solid fa-power-off' : 'fa-solid fa-video'"></i>
+                    <span x-text="cameraOn ? APP_DATA.texts.main.btnCameraOff : APP_DATA.texts.main.btnCameraOn"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- View: Settings -->
+        <div x-show="currentView === 'settings'" x-transition class="absolute inset-0 bg-white z-30 flex flex-col pt-8 overflow-y-auto pb-24">
+            <div class="px-6 mb-8 max-w-2xl mx-auto w-full">
+                <h2 class="text-2xl font-bold text-brand-black mb-2" x-text="APP_DATA.texts.settings.title"></h2>
+                <p class="text-sm text-gray-500 leading-relaxed" x-text="APP_DATA.texts.settings.subtitle"></p>
+            </div>
+
+            <div class="w-full max-w-2xl mx-auto px-4 mb-10">
+                <div class="flex items-center justify-between mb-4 px-2">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest" x-text="APP_DATA.texts.settings.labelWordList"></h3>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <template x-for="(cmd, index) in commands" :key="cmd.id">
+                        <div class="group bg-white rounded-xl p-4 border border-gray-200 hover:border-brand-black hover:shadow-soft transition-all flex items-center gap-4">
+                            <div class="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0 text-sm font-bold text-gray-400 group-hover:bg-brand-black group-hover:text-white transition-colors">
+                                <span x-text="index + 1"></span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="block text-[10px] font-bold text-gray-400 uppercase mb-1.5" x-text="cmd.label"></div>
+                                <input type="text" x-model="cmd.message" class="w-full bg-transparent border-b border-gray-200 focus:border-brand-black outline-none py-1 text-base font-semibold text-brand-black placeholder-gray-300 transition-colors rounded-none" x-bind:placeholder="APP_DATA.texts.settings.placeholder">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="w-full max-w-2xl mx-auto px-6 pb-8 border-t border-gray-100 pt-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="p-2 bg-blue-50 rounded-lg text-blue-600"><i class="fa-solid fa-sliders"></i></div>
+                    <h3 class="font-bold text-lg text-gray-900" x-text="APP_DATA.texts.settings.labelSensor"></h3>
+                </div>
+                <div class="grid gap-6">
+                    <div class="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-arrow-right text-blue-500 text-xs"></i>
+                                <label class="text-xs font-bold text-gray-700" x-text="APP_DATA.sensorSettings.shortBlink.label"></label>
+                            </div>
+                            <span class="text-xs font-mono font-bold text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-100" x-text="shortBlinkDurationSeconds + ' dtk'"></span>
+                        </div>
+                        <input type="range" x-bind:min="APP_DATA.sensorSettings.shortBlink.min" x-bind:max="APP_DATA.sensorSettings.shortBlink.max" x-bind:step="APP_DATA.sensorSettings.shortBlink.step" x-model.number="shortBlinkDurationSeconds" class="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-[11px] text-blue-500 mt-2" x-text="APP_DATA.sensorSettings.shortBlink.hint"></p>
+                    </div>
+
+                    <div class="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-check text-emerald-500 text-xs"></i>
+                                <label class="text-xs font-bold text-gray-700" x-text="APP_DATA.sensorSettings.longBlink.label"></label>
+                            </div>
+                            <span class="text-xs font-mono font-bold text-emerald-600 bg-white px-2 py-0.5 rounded border border-emerald-100" x-text="longBlinkDurationSeconds + ' dtk'"></span>
+                        </div>
+                        <input type="range" x-bind:min="APP_DATA.sensorSettings.longBlink.min" x-bind:max="APP_DATA.sensorSettings.longBlink.max" x-bind:step="APP_DATA.sensorSettings.longBlink.step" x-model.number="longBlinkDurationSeconds" class="w-full h-2 bg-emerald-200 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-[11px] text-emerald-600 mt-2" x-text="APP_DATA.sensorSettings.longBlink.hint"></p>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                        <div class="flex justify-between mb-2">
+                            <label class="text-xs font-bold text-gray-500" x-text="APP_DATA.sensorSettings.sensitivity.label"></label>
+                            <span class="text-xs font-bold text-gray-900" x-text="Number(blinkThreshold).toFixed(2)"></span>
+                        </div>
+                        <input type="range" x-bind:min="APP_DATA.sensorSettings.sensitivity.min" x-bind:max="APP_DATA.sensorSettings.sensitivity.max" x-bind:step="APP_DATA.sensorSettings.sensitivity.step" x-model.number="blinkThreshold" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-[11px] text-gray-400 mt-2" x-text="APP_DATA.sensorSettings.sensitivity.hint"></p>
+                    </div>
+                </div>
+                <div class="mt-8">
+                    <button @click="saveSettings()" class="w-full bg-brand-black text-white font-bold py-4 rounded-xl shadow-lg hover:bg-gray-800 active:scale-95 transition-all" x-text="APP_DATA.texts.settings.btnSave"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: About -->
+        <div x-show="currentView === 'about'" x-transition class="absolute inset-0 bg-white z-30 flex flex-col pt-8 overflow-y-auto pb-24">
+            <div class="px-6 mb-8 max-w-2xl mx-auto w-full">
+                <h2 class="text-2xl font-bold text-brand-black mb-2" x-text="APP_DATA.texts.info.title"></h2>
+                <p class="text-sm text-gray-500 leading-relaxed" x-text="APP_DATA.texts.info.subtitle"></p>
+            </div>
+            <div class="w-full max-w-2xl mx-auto px-6 pb-8">
+                <div class="mb-12">
+                    <h3 class="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-full bg-brand-black text-white flex items-center justify-center text-sm">?</span>
+                        <span>Cara Menggunakan</span>
+                    </h3>
+                    <div class="space-y-8">
+                        <template x-for="(step, index) in APP_DATA.texts.info.steps" :key="index">
+                            <div class="flex gap-4 group">
+                                <div class="flex flex-col items-center">
+                                    <div class="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center text-xs font-bold text-gray-400 bg-white z-10 transition-colors group-hover:border-brand-black group-hover:text-brand-black" x-text="index + 1"></div>
+                                    <div x-show="index < APP_DATA.texts.info.steps.length - 1" class="w-0.5 h-full bg-gray-100 -my-2"></div>
+                                </div>
+                                <div class="pb-4 pt-1">
+                                    <h4 class="font-bold text-base text-gray-900 mb-2" x-text="step.title"></h4>
+                                    <p class="text-sm text-gray-500 leading-relaxed" x-text="step.desc"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <div class="bg-gray-900 text-white rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                    <div class="flex flex-col md:flex-row gap-6 relative z-10">
+                        <div class="shrink-0">
+                            <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center border border-emerald-500/30">
+                                <i class="fa-solid fa-shield-halved text-emerald-400 text-xl"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg mb-2" x-text="APP_DATA.texts.info.privacy.title"></h4>
+                            <p class="text-sm text-gray-400 leading-relaxed mb-4" x-text="APP_DATA.texts.info.privacy.desc"></p>
+                            <div class="inline-flex items-center gap-2 text-[10px] font-mono text-emerald-400 bg-black/40 px-3 py-2 rounded border border-emerald-500/20">
+                                <i class="fa-solid fa-wifi-slash"></i>
+                                <span x-text="APP_DATA.texts.info.privacy.status"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app_logic.js"></script>
+    <script src="/static/config.js"></script>
+</body>
+</html>
