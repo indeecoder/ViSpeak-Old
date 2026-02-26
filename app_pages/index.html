@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <title x-text="APP_DATA.header.title">ViSpeak</title>
+    <title x-text="APP_DATA.header.title"></title>
     
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     
@@ -41,10 +41,17 @@
         #input_video { transform: scaleX(-1); object-fit: cover; }
         .preview-mirror { transform: scaleX(-1); object-fit: cover; }
         [x-cloak] { display: none !important; }
+        
         .animate-swipe-out { animation: swipeRightOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
         .animate-swipe-in { animation: swipeLeftIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        .animate-swipe-left-out { animation: swipeLeftOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        .animate-swipe-right-in { animation: swipeRightIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+
         @keyframes swipeRightOut { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(120%) scale(0.9); opacity: 0; } }
         @keyframes swipeLeftIn { 0% { transform: translateX(-100%) scale(0.9); opacity: 0; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+        @keyframes swipeLeftOut { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(-120%) scale(0.9); opacity: 0; } }
+        @keyframes swipeRightIn { 0% { transform: translateX(100%) scale(0.9); opacity: 0; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+
         .selected-flash { animation: flash-green 0.5s ease-out forwards; }
         @keyframes flash-green { 0% { background-color: var(--color-success); color: white; transform: scale(0.98); box-shadow: 0 0 30px rgba(16, 185, 129, 0.4); } 40% { transform: scale(1.01); } 100% { background-color: white; color: var(--color-text); transform: scale(1); } }
         .flash-border-success { animation: border-green-pulse 0.6s ease-out forwards; }
@@ -130,7 +137,11 @@
             </div>
 
             <div class="flex-1 flex flex-col items-center justify-center">
-                <div id="mainCard" class="w-full max-w-md bg-white rounded-3xl shadow-soft border border-gray-100 overflow-hidden transition-all duration-300 relative mb-8" :class="[ isInCooldown ? 'opacity-60 grayscale' : '', isHoldingBlink ? 'ring-4 ring-emerald-100 scale-[1.02]' : '' ]">
+                
+                <div id="mainCard" 
+                     class="w-full max-w-md bg-white rounded-3xl shadow-soft border border-gray-100 overflow-hidden transition-all duration-300 relative mb-8 touch-pan-y" 
+                     :class="[ isInCooldown ? 'opacity-60 grayscale' : '', isHoldingBlink ? 'ring-4 ring-emerald-100 scale-[1.02]' : '' ]">
+                     
                     <div class="absolute top-6 left-0 w-full flex justify-center z-10 pointer-events-none">
                         <span class="inline-flex items-center px-3 py-1 bg-gray-900/5 rounded-full text-[10px] font-bold text-gray-500 uppercase tracking-widest backdrop-blur-sm border border-white/50">
                             <span class="mr-1" x-text="APP_DATA.texts.main.labelSlot"></span>
@@ -286,7 +297,56 @@
         </div>
     </main>
 
-    <script src="/static/config.js"></script>
-    <script src="/static/app_logic.js"></script>
+    <!-- PERBAIKAN URUTAN & CACHE BUSTING -->
+    <!-- 1. Config.js harus PERTAMA (mendefinisikan APP_DATA) -->
+    <script src="/static/config.js?v={{ v }}"></script>
+    <!-- 2. App_logic.js harus KEDUA (menggunakan APP_DATA) -->
+    <script src="/static/app_logic.js?v={{ v }}"></script>
+
+    <!-- Script Swipe Gesture (Tetap di HTML karena akses DOM global) -->
+    <script>
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        function handleTouchStart(e) {
+            touchStartX = e.changedTouches[0].screenX;
+        }
+
+        function handleTouchEnd(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipeGesture();
+        }
+
+        function handleSwipeGesture() {
+            const threshold = 50;
+            const diff = touchStartX - touchEndX;
+            const alpineData = document.body.__x?.$data;
+            if (!alpineData) return;
+
+            // Swipe Kiri (Next)
+            if (diff > threshold) {
+                if (alpineData.currentIndex < alpineData.commands.length - 1) {
+                    alpineData.animationClass = 'animate-swipe-out';
+                    setTimeout(() => {
+                        alpineData.currentIndex++;
+                        alpineData.animationClass = 'animate-swipe-in';
+                        setTimeout(() => { alpineData.animationClass = ''; }, 300);
+                    }, 300);
+                }
+            }
+            
+            // Swipe Kanan (Previous)
+            if (diff < -threshold) {
+                if (alpineData.currentIndex > 0) {
+                    alpineData.animationClass = 'animate-swipe-left-out';
+                    setTimeout(() => {
+                        alpineData.currentIndex--;
+                        alpineData.animationClass = 'animate-swipe-right-in';
+                        setTimeout(() => { alpineData.animationClass = ''; }, 300);
+                    }, 300);
+                }
+            }
+        }
+    </script>
 </body>
 </html>

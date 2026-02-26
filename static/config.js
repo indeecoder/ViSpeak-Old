@@ -12,28 +12,28 @@ const APP_DATA = {
     // TEMA WARNA
     // ==========================================
     colors: {
-        primary: '#111111',    // Hitam (Warna Utama)
-        success: '#10b981',    // Hijau (Sukses/Aktif)
-        error: '#ef4444',      // Merah (Error)
-        info: '#3b82f6',       // Biru
-        background: '#fafafa', // Abu Muda (Latar Belakang)
-        text: '#374151',       // Abu Teks
-        border: '#e5e7eb',     // Abu Garis
-        surface: '#ffffff'     // Putih (Kartu)
+        primary: '#111111',    // Hitam (Warna utama teks & tombol)
+        success: '#10b981',    // Hijau Emerald (Indikator aktif, sukses)
+        error: '#ef4444',      // Merah (Peringatan error)
+        info: '#3b82f6',       // Biru (Informasi tambahan)
+        background: '#fafafa', // Abu Muda (Latar belakang halaman)
+        text: '#374151',       // Abu Gelap (Warna teks paragraf)
+        border: '#e5e7eb',     // Abu Muda (Garis pembatas)
+        surface: '#ffffff'     // Putih (Warna latar kartu/box)
     },
 
     // ==========================================
-    // DAFTAR KATA
+    // DAFTAR KATA (Edit di sini)
     // ==========================================
     wordList: [
-        { id: 'command1', label: 'command1', message: 'command1' },
-        { id: 'command2', label: 'command2', message: 'command2' },
-        { id: 'command3', label: 'command3', message: 'command3' },
-        { id: 'command4', label: 'command4', message: 'command4' },
-        { id: 'command5', label: 'command5', message: 'command5' },
-        { id: 'command6', label: 'command6', message: 'command6' },
-        { id: 'command7', label: 'command7', message: 'command7' },
-        { id: 'command8', label: 'command8', message: 'command8' },
+        { id: 'cmd1', label: 'command1', message: 'command1' },
+        { id: 'cmd2', label: 'command2', message: 'command2' },
+        { id: 'cmd3', label: 'command3', message: 'command3' },
+        { id: 'cmd4', label: 'command4', message: 'command4' },
+        { id: 'cmd5', label: 'command5', message: 'command5' },
+        { id: 'cmd6', label: 'command6', message: 'command6' },
+        { id: 'cmd7', label: 'command7', message: 'command7' },
+        { id: 'cmd8', label: 'command8', message: 'command8' },
     ],
 
     // ==========================================
@@ -42,17 +42,17 @@ const APP_DATA = {
     sensorSettings: {
         shortBlink: {
             label: 'Kedip Cepat (Geser)',
-            min: 0.1, max: 0.5, step: 0.1, default: 0.2,
+            min: 0.1, max: 0.5, step: 0.1, default: 0.3,
             hint: 'Durasi kedip singkat untuk ganti kata.'
         },
         longBlink: {
             label: 'Kedip Tahan (Eksekusi)',
-            min: 0.5, max: 1.0, step: 0.1, default: 0.7,
+            min: 0.5, max: 1.5, step: 0.1, default: 0.6,
             hint: 'Durasi kedip lama untuk memilih kata.'
         },
         sensitivity: {
             label: 'Batas Deteksi Kedip', 
-            min: 0.10, max: 0.30, step: 0.01, default: 0.27,
+            min: 0.10, max: 0.30, step: 0.01, default: 0.20,
             hint: 'Kalau sering "kedip" sendiri (mata sipit), TURUNKAN nilai ini. Kalau sulit terdeteksi, NAIKKAN.'
         }
     },
@@ -80,7 +80,7 @@ const APP_DATA = {
             labelWordList: "Edit Kata-Kata",
             labelSensor: "Atur Sensor",
             placeholder: "Tulis pesan...",
-            btnSave: "Simpan"
+            btnSave: "Simpan Sementara"
         },
         info: {
             title: "Panduan",
@@ -97,10 +97,10 @@ const APP_DATA = {
             }
         },
         dialog: {
-            successTitle: "Sukses",
-            successMessage: "Pengaturan sudah disimpan di browser.",
+            successTitle: "Diterapkan",
+            successMessage: "Pengaturan diterapkan sementara. Akan reset jika halaman di-refresh.",
             errorTitle: "Error",
-            errorMessage: "Gagal memuat library.",
+            errorMessage: "Gagal memuat library MediaPipe.",
             errorCamera: "Kamera Error"
         }
     }

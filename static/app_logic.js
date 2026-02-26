@@ -1,5 +1,6 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('appData', () => ({
+
         // State Variables
         currentView: 'main',
         isLoading: false,
@@ -38,29 +39,9 @@ document.addEventListener('alpine:init', () => {
             return this.commands[this.currentIndex];
         },
 
-        // INIT: Cek Local Storage saat aplikasi mulai
+        // INIT
         initApp() {
-            const savedConfig = localStorage.getItem('vispeak_config');
-
-            if (savedConfig) {
-                try {
-                    const data = JSON.parse(savedConfig);
-
-                    // Load kata-kata jika ada
-                    if (data.commands && data.commands.length > 0) {
-                        this.commands = data.commands;
-                    }
-
-                    // Load sensor jika ada
-                    if (data.shortBlinkDurationSeconds) this.shortBlinkDurationSeconds = data.shortBlinkDurationSeconds;
-                    if (data.longBlinkDurationSeconds) this.longBlinkDurationSeconds = data.longBlinkDurationSeconds;
-                    if (data.blinkThreshold) this.blinkThreshold = data.blinkThreshold;
-
-                    console.log("Konfigurasi sebelumnya dimuat.");
-                } catch (e) {
-                    console.error("Gagal load config:", e);
-                }
-            }
+            console.log("App started. Using config:", APP_DATA);
         },
 
         getStatusText() {
@@ -137,55 +118,109 @@ document.addEventListener('alpine:init', () => {
 
         processFaceMeshResults(results) {
             if (!this.cameraOn) return;
+
+            // Cooldown check
             if (Date.now() - this.lastActionTime < this.cooldownDuration) {
-                this.isInCooldown = true; this.isBlinking = false; this.blinkStartTime = null; return;
-            } else { this.isInCooldown = false; }
+                this.isInCooldown = true;
+                this.isBlinking = false;
+                this.blinkStartTime = null;
+                return;
+            } else {
+                this.isInCooldown = false;
+            }
 
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
+
+                // Hitung EAR untuk kiri dan kanan
                 const leftEAR = this.calculateEAR(landmarks, [33, 160, 158, 133, 153, 145]);
                 const rightEAR = this.calculateEAR(landmarks, [362, 385, 387, 263, 373, 380]);
                 const avgEAR = (leftEAR + rightEAR) / 2;
+
                 const now = Date.now();
 
+                // LOGIKA DETEKSI KEDIIP
                 if (avgEAR < this.blinkThreshold) {
-                    if (!this.isBlinking) { this.blinkStartTime = now; this.isBlinking = true; }
+                    // Mata tertutup
+                    if (!this.isBlinking) {
+                        this.blinkStartTime = now;
+                        this.isBlinking = true;
+                    }
+
                     const currentDuration = now - this.blinkStartTime;
                     const shortMs = this.shortBlinkDurationSeconds * 1000;
                     const longMs = this.longBlinkDurationSeconds * 1000;
+
+                    // Update progress bar jika sudah melewati batas short blink
                     if (currentDuration >= shortMs) {
                         this.isHoldingBlink = true;
-                        this.holdPercentage = Math.min(((currentDuration - shortMs) / (longMs - shortMs)) * 100, 100);
+                        // Hitung persentase (0% adalah shortMs, 100% adalah longMs)
+                        let progress = ((currentDuration - shortMs) / (longMs - shortMs)) * 100;
+                        this.holdPercentage = Math.min(progress, 100);
                     }
                 } else {
-                    this.isBlinking = false; this.isHoldingBlink = false; this.holdPercentage = 0;
+                    // Mata terbuka kembali
+                    this.isBlinking = false;
+                    this.isHoldingBlink = false;
+                    this.holdPercentage = 0;
+
                     if (this.blinkStartTime) {
                         const duration = now - this.blinkStartTime;
                         const shortMs = this.shortBlinkDurationSeconds * 1000;
                         const longMs = this.longBlinkDurationSeconds * 1000;
-                        if (duration >= longMs) this.triggerBlinkAction();
-                        else if (duration >= shortMs) this.performSwipeAndNext();
+
+                        // Eksekusi jika durasi melewati Long Blink
+                        if (duration >= longMs) {
+                            this.triggerBlinkAction();
+                        } 
+                        // Geser jika durasi di antara Short dan Long
+                        else if (duration >= shortMs) {
+                            this.performSwipeAndNext();
+                        }
                     }
                     this.blinkStartTime = null;
                 }
+
             } else {
-                this.isBlinking = false; this.isHoldingBlink = false; this.holdPercentage = 0; this.blinkStartTime = null;
+                // Wajah tidak terdeteksi
+                this.isBlinking = false;
+                this.isHoldingBlink = false;
+                this.holdPercentage = 0;
+                this.blinkStartTime = null;
             }
         },
 
+        // FUNGSI KALKULASI EAR YANG SUDAH DIPERBAIKI (FIX BUG)
         calculateEAR(landmarks, indices) {
-            const p = indices.map(i => landmarks[i]);
+            // Ambil titik koordinat dari landmark
+            const p1 = landmarks[indices[1]]; // Vertikal Atas 1
+            const p2 = landmarks[indices[5]]; // Vertikal Bawah 1
+            const p3 = landmarks[indices[2]]; // Vertikal Atas 2
+            const p4 = landmarks[indices[4]]; // Vertikal Bawah 2
+            const p5 = landmarks[indices[0]]; // Horizontal Kiri
+            const p6 = landmarks[indices[3]]; // Horizontal Kanan
+
+            // Fungsi jarak euclidean
             const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-            const vertical = (dist(p[1], p[2]) + dist(p[3], p[4])) / 2;
-            const horizontal = dist(p[0], p[5]);
-            return vertical / horizontal;
+
+            // Rumus EAR: (Jarak Vertikal 1 + Jarak Vertikal 2) / (2 * Jarak Horizontal)
+            // Vertical distance adalah jarak antara kelopak atas dan bawah
+            const vertical = (dist(p1, p2) + dist(p3, p4)) / 2;
+            // Horizontal distance adalah lebar mata
+            const horizontal = dist(p5, p6);
+
+            // Hindari pembagian nol
+            return vertical / (horizontal || 0.001);
         },
 
         triggerBlinkAction() {
             const cmd = this.commands[this.currentIndex];
             if (cmd) {
                 this.outputText = cmd.message;
-                this.lastActionTime = Date.now(); this.isInCooldown = true;
+                this.lastActionTime = Date.now(); 
+                this.isInCooldown = true;
+
+                // Animasi Visual
                 const mainCard = document.getElementById('mainCard');
                 if(mainCard) {
                     mainCard.classList.remove('shadow-soft');
@@ -195,21 +230,12 @@ document.addEventListener('alpine:init', () => {
                         mainCard.classList.add('shadow-soft');
                     }, 600);
                 }
+
                 this.speakText();
             }
         },
 
-        // SAVE: Simpan ke Local Storage
         saveSettings() {
-            const dataToSave = {
-                commands: this.commands,
-                shortBlinkDurationSeconds: this.shortBlinkDurationSeconds,
-                longBlinkDurationSeconds: this.longBlinkDurationSeconds,
-                blinkThreshold: this.blinkThreshold
-            };
-
-            localStorage.setItem('vispeak_config', JSON.stringify(dataToSave));
-
             this.openDialog(APP_DATA.texts.dialog.successTitle, APP_DATA.texts.dialog.successMessage, "success");
             this.currentView = 'main';
         },
